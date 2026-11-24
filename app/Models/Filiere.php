@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Filiere extends Model
@@ -12,26 +13,17 @@ class Filiere extends Model
 
     protected $fillable = [
         'code',
-        'name',
-        'department',
-        'description',
-        'is_active',
+        'nom',
+        'chef_id',
     ];
 
-    protected function casts(): array
+    public function chef(): BelongsTo
     {
-        return [
-            'is_active' => 'boolean',
-        ];
+        return $this->belongsTo(User::class, 'chef_id');
     }
 
-    public function promotions(): HasMany
+    public function pvs(): HasMany
     {
-        return $this->hasMany(Promotion::class);
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
+        return $this->hasMany(Pv::class);
     }
 }
