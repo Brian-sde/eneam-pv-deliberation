@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\Role;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,136 +13,90 @@ class Pv extends Model
 {
     use HasFactory;
 
+    public const STATUT_BROUILLON = 'brouillon';
+    public const STATUT_VALIDE = 'valide';
+    public const STATUT_ARCHIVE = 'archive';
+
     protected $fillable = [
-        'promotion_id',
-        'semester_id',
         'reference',
         'session',
-        'deliberation_date',
-        'jury_president',
-        'jury_members',
-        'file_path',
-        'file_hash_sha256',
-        'status',
-        'parent_pv_id',
-        'rectification_reason',
-        'observations',
-        'created_by',
-        'validated_by',
-        'validated_at',
+        'date_deliberation',
+        'president_jury',
+        'membres_jury',
+        'fichier_path',
+        'statut',
+        'filiere_id',
+        'annee_academique_id',
+        'niveau_id',
+        'semestre_id',
+        'user_id',
     ];
 
     protected function casts(): array
     {
         return [
-            'deliberation_date' => 'date',
-            'validated_at' => 'datetime',
-            'jury_members' => 'array',
+            'date_deliberation' => 'date',
         ];
     }
 
-    public function promotion(): BelongsTo
+    // Relations
+
+    public function filiere(): BelongsTo
     {
-        return $this->belongsTo(Promotion::class);
+        return $this->belongsTo(Filiere::class);
     }
 
-    public function semester(): BelongsTo
+    public function anneeAcademique(): BelongsTo
     {
-        return $this->belongsTo(Semester::class);
+        return $this->belongsTo(AnneeAcademique::class);
     }
 
-    public function parentPv(): BelongsTo
+    public function niveau(): BelongsTo
     {
-        return $this->belongsTo(Pv::class, 'parent_pv_id');
+        return $this->belongsTo(Niveau::class);
     }
 
-    public function rectifications(): HasMany
+    public function semestre(): BelongsTo
     {
-        return $this->hasMany(Pv::class, 'parent_pv_id');
+        return $this->belongsTo(Semestre::class);
     }
 
-    public function studentResults(): HasMany
+    /** Utilisateur qui a créé le PV */
+    public function createur(): BelongsTo
     {
-        return $this->hasMany(PvStudentResult::class)->orderBy('rank');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function creator(): BelongsTo
+    public function resultats(): HasMany
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->hasMany(Resultat::class);
     }
 
-    public function validator(): BelongsTo
+    public function journals(): HasMany
     {
-        return $this->belongsTo(User::class, 'validated_by');
+        return $this->hasMany(Journal::class);
     }
 
-    // --- Helpers de statut ---
-    public function isValidated(): bool
-    {
-        return $this->status === 'validated';
-    }
+    // Scope : PV visibles selon l'utilisateur
 
-    public function isDraft(): bool
+    public function scopeVisiblePar(Builder $query, User $user): Builder
     {
-        return $this->status === 'draft';
-    }
-
-    public function isRectified(): bool
-    {
-        return $this->status === 'rectified';
-    }
-
-    public function isArchived(): bool
-    {
-        return $this->status === 'archived';
-    }
-
-    // --- Scopes ---
-    public function scopeValidated($query)
-    {
-        return $query->where('status', 'validated');
-    }
-
-    public function scopeDraft($query)
-    {
-        return $query->where('status', 'draft');
-    }
-
-    /**
-     * Recherche multicritère de PV.
-     */
-    public function scopeSearch($query, array $filters = [])
-    {
-        if (!empty($filters['reference'])) {
-            $query->where('reference', 'like', '%' . trim($filters['reference']) . '%');
+        if ($user->role === Role::ChefDepartement) {
+            return $query->whereIn('filiere_id', $user->filieres()->pluck('id'));
         }
 
-        if (!empty($filters['session'])) {
-            $query->where('session', $filters['session']);
-        }
+        return $query; // admin et directeur : tout
+    }
 
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
+    // Aides
 
-        if (!empty($filters['semester_id'])) {
-            $query->where('semester_id', $filters['semester_id']);
-        }
+    public function estBrouillon(): bool
+    {
+        return $this->statut === self::STATUT_BROUILLON;
+    }
 
-        if (!empty($filters['academic_year_id']) || !empty($filters['filiere_id']) || !empty($filters['level_id'])) {
-            $query->whereHas('promotion', function ($q) use ($filters) {
-                if (!empty($filters['academic_year_id'])) {
-                    $q->where('academic_year_id', $filters['academic_year_id']);
-                }
-                if (!empty($filters['filiere_id'])) {
-                    $q->where('filiere_id', $filters['filiere_id']);
-                }
-                if (!empty($filters['level_id'])) {
-                    $q->where('level_id', $filters['level_id']);
-                }
-            });
-        }
-
-        return $query;
+    public function estValide(): bool
+    {
+        return $this->statut === self::STATUT_VALIDE;
     }
 }
